@@ -1,0 +1,60 @@
+#!/bin/env bash
+
+set -e
+
+is_there() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+check_dependencies() {
+  if ! is_there nmcli ; then
+    echo "nmcli not found. Please install NetworkManager."
+    exit 1
+  fi
+
+  if ! is_there dmenu ; then
+    echo "dmenu not found. Please install dmenu."
+    exit 1
+  fi
+}
+
+main() {
+  check_dependencies
+
+  nmcli radio wifi on
+
+  # Scan and optain networks
+  networks=$(nmcli -f SSID,SECURITY,BARS device wifi list | tail -n +2)
+  if [ -z "$networks" ]; then
+    echo "No WiFi networks found" | dmenu -p "Error:"
+    exit 1
+  fi
+
+  # Select network with dmenu
+  selected=$(echo "$networks" | dmenu -i -l 20 -p "Select WiFi Network:")
+  [ -z "$selected" ] && exit 0;
+
+  ssid=$(echo "$selected" | awk '{$NF=""; $(NF-1)=""; print $0}' | sed 's/[[:space:]]*$//')
+
+  # Check if already saved
+  saved_connections=$(nmcli -g NAME connection show)
+
+  if echo "$saved_connections" | grep -Fxq "$ssid"; then
+    if nmcli connection up "$ssid"; then
+        notify-send "WiFi" "Connected to $ssid"
+    else
+        notify-send "WiFi" "Failed to connect to $ssid"
+    fi
+  else
+    password=$(echo "" | dmenu -P -p "Enter password for $ssid: ")
+    [ -z "$password" ] && exit 0;
+
+    if nmcli device wifi connect "$ssid" password "$password"; then
+        notify-send "WiFi" "Connected to $ssid"
+    else
+        notify-send "WiFi" "Failed to connect to $ssid. Check password."
+    fi
+  fi
+}
+
+main "$@"
