@@ -18,16 +18,31 @@ check_dependencies() {
   fi
 }
 
+# Parameters:
+# $1 = ssid
+connect_with_password() {
+  password=$(echo "" | dmenu -P -p "Enter password for $1: ")
+  [ -z "$password" ] && exit 0;
+
+  if nmcli device wifi connect "$1" password "$password"; then
+    notify-send "WiFi" "Connected to $1"
+  else
+    notify-send "WiFi" "Failed to connect to $1. Check password."
+  fi
+}
+
 main() {
   check_dependencies
 
   nmcli radio wifi on
 
   # Scan and optain networks
+  notify-send "WiFi" "Scanning for networks.." 2>/dev/null &
+  nmcli device wifi rescan 2>/dev/null
   networks=$(nmcli -f SSID,SECURITY,BARS device wifi list | tail -n +2)
   if [ -z "$networks" ]; then
-    echo "No WiFi networks found" | dmenu -p "Error:"
-    exit 1
+    notify-send "WiFi" "No Networks Found.."
+    exit
   fi
 
   # Select network with dmenu
@@ -41,19 +56,20 @@ main() {
 
   if echo "$saved_connections" | grep -Fxq "$ssid"; then
     if nmcli connection up "$ssid"; then
-        notify-send "WiFi" "Connected to $ssid"
+      notify-send "WiFi" "Connected to $ssid"
     else
-        notify-send "WiFi" "Failed to connect to $ssid"
+      notify-send "WiFi" "Failed to connect to $ssid"
+
+      # Connection failed, ask if user wants to re-enter password
+      retry=$(echo -e "Yes\nNo" | dmenu -p "Connection failed. Re-enter password?")
+      [ "$retry" != "Yes" ] && exit
+
+      nmcli connection delete "$ssid" >/dev/null 2>&1
+
+      connect_with_password "$ssid"
     fi
   else
-    password=$(echo "" | dmenu -P -p "Enter password for $ssid: ")
-    [ -z "$password" ] && exit 0;
-
-    if nmcli device wifi connect "$ssid" password "$password"; then
-        notify-send "WiFi" "Connected to $ssid"
-    else
-        notify-send "WiFi" "Failed to connect to $ssid. Check password."
-    fi
+    connect_with_password "$ssid"
   fi
 }
 
