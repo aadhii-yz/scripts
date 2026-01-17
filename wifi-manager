@@ -2,6 +2,8 @@
 
 set -e
 
+# Parameters:
+# $1 = program_name
 is_there() {
   command -v "$1" >/dev/null 2>&1
 }
@@ -15,6 +17,15 @@ check_dependencies() {
   if ! is_there dmenu ; then
     echo "dmenu not found. Please install dmenu."
     exit 1
+  fi
+}
+
+current_network() {
+  current_network=$(nmcli -t -f NAME connection show --active | grep -v "lo" | head -n 1)
+  if [ -z "$current_network" ]; then
+    echo "No Connection"
+  else
+    echo "$current_network"
   fi
 }
 
@@ -37,19 +48,41 @@ main() {
   nmcli radio wifi on
 
   # Scan and optain networks
-  notify-send "WiFi" "Scanning for networks.." 2>/dev/null &
+  curr_network="$(current_network)"
+  notify-send "WiFi" "Scanning for networks... ($curr_network)" 2>/dev/null &
   nmcli device wifi rescan 2>/dev/null
-  networks=$(nmcli -f SSID,SECURITY,BARS device wifi list | tail -n +2)
+  networks=$(nmcli -f SSID,BSSID,SECURITY,FREQ,SIGNAL,BARS device wifi list | tail -n +2)
   if [ -z "$networks" ]; then
     notify-send "WiFi" "No Networks Found.."
     exit
+  fi
+
+  # Add disconnect and rescan options
+  if [ "$curr_network" != "No connection" ]; then
+    networks="$networks
+󰖪 Disconnect from $curr_network
+󰑓 Rescan Networks"
+  else
+    networks="$networks
+󰑓 Rescan Networks"
   fi
 
   # Select network with dmenu
   selected=$(echo "$networks" | dmenu -i -l 20 -p "Select WiFi Network:")
   [ -z "$selected" ] && exit 0;
 
-  ssid=$(echo "$selected" | awk '{$NF=""; $(NF-1)=""; print $0}' | sed 's/[[:space:]]*$//')
+  # Handle disconnect and rescan options
+  if [[ "$selected" == "󰖪 Disconnect"* ]]; then
+    nmcli connection down "$curr_network" 2>/dev/null
+    notify-send "WiFi" "Disconnected from $curr_network" 2>/dev/null
+    exit 0
+  fi
+
+  if [[ "$selected" == "󰑓 Rescan"* ]]; then
+    exec "$0"
+  fi
+
+  ssid=$(echo "$selected" | awk '{print $1}')
 
   # Check if already saved
   saved_connections=$(nmcli -g NAME connection show)
