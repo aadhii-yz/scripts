@@ -47,15 +47,15 @@ main () {
         mkdir -p "$ROOT_DIR/$DIR"
       fi
 
-      NOTE_FILE="$DIR/$DD_DAY.md"
+      NOTE_FILE="$ROOT_DIR/$DIR/$DD_DAY.md"
       "$JRNL_EDITOR" "$NOTE_FILE"
     ;;
 
     "note")
       DIR="Notes"
 
-      NAME=""
-      if [[ -z "$2" ]]; then
+      NAME="$2"
+      if [[ -z "$NAME" ]]; then
         if is_there gum > /dev/null; then
           NAME=$(gum input --prompt="Enter Note FileName : " --placeholder="draft")
         else
@@ -75,8 +75,8 @@ main () {
         mkdir -p "$ROOT_DIR/$DIR"
       fi
 
-      NOTE_FILE="$DIR/$NAME.md"
-      "$JRNL_EDITOR" "$ROOT_DIR/$NOTE_FILE"
+      NOTE_FILE="$ROOT_DIR/$DIR/$NAME.md"
+      "$JRNL_EDITOR" "$NOTE_FILE"
     ;;
 
     "sync")
